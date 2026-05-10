@@ -24,6 +24,7 @@ AUTOGRADER CONTRACT (DO NOT MODIFY SIGNATURES):
 import math
 import copy
 import os
+import re
 from typing import Optional, Tuple, Dict, List
 
 import torch
@@ -366,6 +367,9 @@ class EncoderLayer(nn.Module):
         return x
 
 
+# ══════════════════════════════════════════════════════════════════════
+#  DECODER LAYER  (Pre-LayerNorm variant)
+# ══════════════════════════════════════════════════════════════════════
 
 class DecoderLayer(nn.Module):
     """
@@ -384,7 +388,6 @@ class DecoderLayer(nn.Module):
 
     def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float = 0.1) -> None:
         super().__init__()
-        # FIXED: Changed masked_self_attn to masked_sa to match checkpoint
         self.masked_sa        = MultiHeadAttention(d_model, num_heads, dropout)
         self.cross_attn       = MultiHeadAttention(d_model, num_heads, dropout)
         self.feed_fwd         = PositionwiseFeedForward(d_model, d_ff, dropout)
@@ -417,7 +420,6 @@ class DecoderLayer(nn.Module):
         # Sub-layer 1: masked self-attention
         residual = x
         x        = residual + self.drop1(
-            # FIXED: Changed masked_self_attn to masked_sa
             self.masked_sa(self.norm1(x), self.norm1(x), self.norm1(x), tgt_mask)
         )
 
@@ -661,7 +663,7 @@ class Transformer(nn.Module):
             self.src_vocab = None
             self.tgt_vocab = None
 
-        # ── Step 6: Load German spaCy tokeniser ───────────────────────
+        # ── Step 6: Load German spaCy tokeniser OR fallback ───────────
         self._de_tokenize = None
         try:
             import spacy
@@ -672,13 +674,13 @@ class Transformer(nn.Module):
                     [tok.text.lower() for tok in _nlp.tokenizer(text)]
             )
             print("[Transformer] spaCy German tokeniser ready.")
-        except OSError:
+        except (OSError, ImportError) as e:
             print(
-                "[Transformer] WARNING: de_core_news_sm not found. "
-                "Run: python -m spacy download de_core_news_sm"
+                f"[Transformer] WARNING: spaCy/de_core_news_sm not found ({e}). "
+                "Falling back to basic regex tokeniser."
             )
-        except ImportError:
-            print("[Transformer] WARNING: spaCy not installed.")
+            # Basic fallback tokeniser that splits words and punctuation
+            self._de_tokenize = lambda text: re.findall(r'\w+|[^\w\s]', text.lower())
 
     # ── Internal helpers ──────────────────────────────────────────────
 
@@ -818,7 +820,7 @@ class Transformer(nn.Module):
 
         Full pipeline:
             raw DE string
-            → spaCy tokenisation (lowercase)
+            → spaCy tokenisation (lowercase) OR fallback tokenisation
             → integer encoding with src_vocab  (+<sos>/<eos>)
             → Transformer encoder
             → autoregressive greedy decoder
@@ -834,11 +836,6 @@ class Transformer(nn.Module):
         Returns:
             Translated English string, special tokens stripped.
         """
-        if self._de_tokenize is None:
-            raise RuntimeError(
-                "spaCy German model not available. "
-                "Install it with: python -m spacy download de_core_news_sm"
-            )
         if self.src_vocab is None or self.tgt_vocab is None:
             raise RuntimeError(
                 "Vocabularies not loaded. "
