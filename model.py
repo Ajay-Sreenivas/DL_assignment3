@@ -615,7 +615,7 @@ class Transformer(nn.Module):
         num_heads:      int            = 8,
         d_ff:           int            = 512,
         dropout:        float          = 0.1,
-        gdrive_id:      str            = "YOUR_GDRIVE_FILE_ID_HERE",
+        gdrive_id:      str            = "1jD9mICFAzSmWYe_u70gIDog27-Vsn8Ta",
         checkpoint_path:str            = "best_checkpoint.pt",
     ) -> None:
         super().__init__()
