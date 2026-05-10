@@ -366,9 +366,6 @@ class EncoderLayer(nn.Module):
         return x
 
 
-# ══════════════════════════════════════════════════════════════════════
-#  DECODER LAYER  (Pre-LayerNorm variant)
-# ══════════════════════════════════════════════════════════════════════
 
 class DecoderLayer(nn.Module):
     """
@@ -387,7 +384,8 @@ class DecoderLayer(nn.Module):
 
     def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float = 0.1) -> None:
         super().__init__()
-        self.masked_self_attn = MultiHeadAttention(d_model, num_heads, dropout)
+        # FIXED: Changed masked_self_attn to masked_sa to match checkpoint
+        self.masked_sa        = MultiHeadAttention(d_model, num_heads, dropout)
         self.cross_attn       = MultiHeadAttention(d_model, num_heads, dropout)
         self.feed_fwd         = PositionwiseFeedForward(d_model, d_ff, dropout)
 
@@ -419,7 +417,8 @@ class DecoderLayer(nn.Module):
         # Sub-layer 1: masked self-attention
         residual = x
         x        = residual + self.drop1(
-            self.masked_self_attn(self.norm1(x), self.norm1(x), self.norm1(x), tgt_mask)
+            # FIXED: Changed masked_self_attn to masked_sa
+            self.masked_sa(self.norm1(x), self.norm1(x), self.norm1(x), tgt_mask)
         )
 
         # Sub-layer 2: cross-attention (queries from decoder, keys/values from encoder)
